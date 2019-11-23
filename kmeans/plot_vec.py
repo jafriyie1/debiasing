@@ -209,7 +209,6 @@ def main():
     #X_vecs, corr_word_list = get_vectors(elmo, stereo_list)
     X_vecs = proj_gen_space(elmo, stereo_list, basis, opt.lang)
     evaluate_projected_vectors(stereo_list, X_vecs)
-    exit(0)
     model, labeled_words = train_kmeans(X_vecs, stereo_list, n_colors)
 
     print(sorted(labeled_words, key=lambda x: x[1]))
