@@ -1,5 +1,6 @@
 from time import sleep
 from allennlp.commands.elmo import ElmoEmbedder
+from elmoformanylangs import Embedder
 import os
 import pandas as pd
 import numpy as np
@@ -17,6 +18,9 @@ import matplotlib.pyplot as plt
 
 LANG_SPECIFIC_DATA = {
     'en': {
+        'createEmbedder': lambda: ElmoEmbedder(),
+        'getEmbedding': lambda elmo, sent: elmo.embed_sentence(sent)[2][0],
+        'getEmbeddingProf': lambda elmo, sent: elmo.embed_sentence(sent)[2][1],
         'pairs_two': [
             ["woman", "man"],
             ["girl", "boy"],
@@ -30,6 +34,9 @@ LANG_SPECIFIC_DATA = {
         'tok_sent_prof': lambda x: ['The', x, 'ate', 'an', 'apple', 'for', 'breakfast']
     },
     'hi': {
+        'createEmbedder': lambda: Embedder('../elmo_hindi'),
+        'getEmbedding': lambda elmo, sent: elmo.sents2elmo([sent], output_layer=-1)[0][0],
+        'getEmbeddingProf': lambda elmo, sent: elmo.sents2elmo([sent], output_layer=-1)[0][0],
         'pairs': [['लड़का', 'लड़की']],
         'pairs_two': [
             ['आदमी', 'औरत'],
@@ -50,11 +57,11 @@ def get_gender_basis(elmo, lang):
     tok_sent_f = LANG_SPECIFIC_DATA[lang]['tok_sent'](female)
     tok_sent_m = LANG_SPECIFIC_DATA[lang]['tok_sent'](male)
 
-    vectors = elmo.embed_sentence(tok_sent_f)
-    bias_subspace.append(vectors[2][1])
+    vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent_f)
+    bias_subspace.append(vec)
 
-    vectors2 = elmo.embed_sentence(tok_sent_m)
-    bias_subspace.append(vectors2[2][1])
+    vec2 = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent_m)
+    bias_subspace.append(vec2)
 
     for pair in pairs_two:
         female, male = pair
@@ -62,11 +69,11 @@ def get_gender_basis(elmo, lang):
         tok_sent_f = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](female)
         tok_sent_m = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](male)
 
-        vectors = elmo.embed_sentence(tok_sent_f)
-        bias_subspace.append(vectors[2][1])
+        vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent_f)
+        bias_subspace.append(vec)
 
-        vectors2 = elmo.embed_sentence(tok_sent_m)
-        bias_subspace.append(vectors2[2][1])
+        vec2 = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent_m)
+        bias_subspace.append(vec2)
 
     bias_subspace = np.array(bias_subspace)
     basis = bias_subspace
@@ -93,8 +100,7 @@ def score_vectors(elmo, word_list, basis, lang):
 
     for word in word_list:
         tok_sent = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](word)
-        vec = elmo.embed_sentence(tok_sent)
-        vec = vec[2][1]
+        vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent)
 
         score = 0
         for b in basis:
@@ -116,8 +122,7 @@ def proj_gen_space(elmo, word_list, basis, lang):
     proj_vectors = []
     for word in word_list:
         tok_sent = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](word)
-        vec = elmo.embed_sentence(tok_sent)
-        vec = vec[2][1]
+        vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent)
 
         score = 0
         new_vec = 0
@@ -158,20 +163,19 @@ def get_vectors(elmo, word_list, lang):
 
     for word in word_list:
         tok_sent = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](word)
-        vec = elmo.embed_sentence(tok_sent)
-        vec = vec[2][1]
+        vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent)
         vec_list.append(vec)
 
     return np.array(vec_list), new_word_list
 
 
 def train_kmeans(X, words, n_clus=2):
-    model = KMeans(n_clusters=n_clus).fit(X)
-    labels = list(model.labels_)
+    sents2elmo = KMeans(n_clusters=n_clus).fit(X)
+    labels = list(sents2elmo.labels_)
     corr_words_and_labels = list(zip(words, labels))
     #corr_words_and_labels = sorted(corr_words_and_labels, key= lambda x: x[1])
 
-    return model, corr_words_and_labels
+    return sents2elmo, corr_words_and_labels
 
 
 def gen_df(label_list, score_list):
@@ -196,7 +200,7 @@ parser.add_argument(
 def main():
     n_colors = 2
     opt = parser.parse_args()
-    elmo = ElmoEmbedder()
+    elmo = LANG_SPECIFIC_DATA[opt.lang]['createEmbedder']()
     data_path = os.path.join(
         os.getcwd(), 'gp_debias', 'wordlist', opt.lang, 'stereotype_list.tsv')
     data_path2 = os.path.join(
@@ -209,7 +213,7 @@ def main():
     #X_vecs, corr_word_list = get_vectors(elmo, stereo_list)
     X_vecs = proj_gen_space(elmo, stereo_list, basis, opt.lang)
     evaluate_projected_vectors(stereo_list, X_vecs)
-    model, labeled_words = train_kmeans(X_vecs, stereo_list, n_colors)
+    sents2elmo, labeled_words = train_kmeans(X_vecs, stereo_list, n_colors)
 
     print(sorted(labeled_words, key=lambda x: x[1]))
     pca_viz(X_vecs, labeled_words, n_colors)
