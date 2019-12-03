@@ -112,6 +112,7 @@ classifier = SequenceClassifier(
     model_name=MODEL_NAME, num_labels=num_labels, cache_dir=CACHE_DIR
 )
 
+torch.save(classifier.model.state_dict(), "./pretrained_{0}.pth".format(round(time.time()))))
 with Timer() as t:
     classifier.fit(
             train_dataloader,
@@ -119,9 +120,9 @@ with Timer() as t:
             learning_rate=LEARNING_RATE,
             warmup_steps=WARMUP_STEPS,
         )
-
 print("Training time : {:.3f} hrs".format(t.interval / 3600))
 
+torch.save(classifier.model.state_dict(), "./trained_{0}.pth".format(round(time.time()))))
 ### PREDICTION
 with Timer() as t:
     predictions_matched = classifier.predict(dev_dataloader_matched)
@@ -130,6 +131,7 @@ print("Prediction time : {:.3f} hrs".format(t.interval / 3600))
 with Timer() as t:
     predictions_mismatched = classifier.predict(dev_dataloader_mismatched)
 print("Prediction time : {:.3f} hrs".format(t.interval / 3600))
+
 
 ### EVALUATION
 predictions_matched = label_encoder.inverse_transform(predictions_matched)
@@ -140,6 +142,7 @@ print(classification_report(dev_df_mismatched[LABEL_COL], predictions_mismatched
 
 result_matched_dict = classification_report(dev_df_matched[LABEL_COL], predictions_matched, digits=3, output_dict=True)
 result_mismatched_dict = classification_report(dev_df_mismatched[LABEL_COL], predictions_mismatched, digits=3, output_dict=True)
+
 # sb.glue("matched_precision", result_matched_dict["weighted avg"]["precision"])
 # sb.glue("matched_recall", result_matched_dict["weighted avg"]["recall"])
 # sb.glue("matched_f1", result_matched_dict["weighted avg"]["f1-score"])
