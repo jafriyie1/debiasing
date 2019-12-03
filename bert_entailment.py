@@ -25,7 +25,7 @@ print(SequenceClassifier.list_supported_models())
 ### CONFIGURATION
 MODEL_NAME = "distilbert-base-uncased"
 TO_LOWER = False
-BATCH_SIZE = 16
+BATCH_SIZE = 48
 
 TRAIN_DATA_USED_FRACTION = 1
 DEV_DATA_USED_FRACTION = 1
@@ -33,9 +33,9 @@ NUM_EPOCHS = 2
 WARMUP_STEPS= 2500
 
 if QUICK_RUN:
-    TRAIN_DATA_USED_FRACTION = 0.001
-    DEV_DATA_USED_FRACTION = 0.01
-    NUM_EPOCHS = 1
+    TRAIN_DATA_USED_FRACTION = 1
+    DEV_DATA_USED_FRACTION = 1
+    NUM_EPOCHS = 5
     WARMUP_STEPS= 10
 
 if not torch.cuda.is_available():
@@ -111,8 +111,8 @@ dev_dataloader_mismatched = processor.create_dataloader_from_df(
 classifier = SequenceClassifier(
     model_name=MODEL_NAME, num_labels=num_labels, cache_dir=CACHE_DIR
 )
-
 torch.save(classifier.model.state_dict(), "./pretrained_{0}.pth".format(round(time.time()))))
+
 with Timer() as t:
     classifier.fit(
             train_dataloader,
@@ -121,8 +121,8 @@ with Timer() as t:
             warmup_steps=WARMUP_STEPS,
         )
 print("Training time : {:.3f} hrs".format(t.interval / 3600))
-
 torch.save(classifier.model.state_dict(), "./trained_{0}.pth".format(round(time.time()))))
+
 ### PREDICTION
 with Timer() as t:
     predictions_matched = classifier.predict(dev_dataloader_matched)
