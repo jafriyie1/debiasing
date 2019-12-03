@@ -594,10 +594,9 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
 
         with open(sub_path, 'rb') as f:
             self.subspace = pickle.load(f)
-        self.subspace = self.subspace.T[:768, :]
+        self.subspace = self.subspace.T[:768, :] # TODO: stop truncating once the source data is actually a BERT subspace
 
         self.projection = reduce(np.matmul, [self.subspace, np.linalg.inv(np.matmul(self.subspace.T, self.subspace)), self.subspace.T])
-        # print("PROJ SHAPE", self.projection.shape)
 
     def forward(self, input_ids,  attention_mask=None, head_mask=None, labels=None):
         distilbert_output = self.distilbert(input_ids=input_ids,
@@ -614,11 +613,8 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
         seq_len = hidden_state.shape[1]
         repeat_proj = torch.from_numpy(np.expand_dims(self.projection, axis=0)).to(hidden_state.device)
         repeat_proj = repeat_proj.expand(seq_len, -1, -1)
-        # print("HERE", repeat_proj.shape)
         emb_state = hidden_state.transpose(1, 0).transpose(2, 1) # now its seq_len x dim x bs
-        # print("EMB", emb_state.shape)
         projected = torch.bmm(repeat_proj, emb_state)
-        # print("PROJECTED", projected.shape)
         total = torch.sum(torch.norm(projected, dim=1))
 
         outputs = (logits,) + distilbert_output[1:]
