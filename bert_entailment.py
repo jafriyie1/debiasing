@@ -10,14 +10,13 @@ from tempfile import TemporaryDirectory
 import numpy as np
 from sklearn.metrics import classification_report
 from sklearn.preprocessing import LabelEncoder
-
+import time
 import torch
 
 from utils_nlp.models.transformers.sequence_classification import Processor, SequenceClassifier
 from utils_nlp.dataset.multinli import load_pandas_df
 from utils_nlp.common.timer import Timer
 
-QUICK_RUN = True
 CACHE_DIR = './cache'
 
 print(SequenceClassifier.list_supported_models())
@@ -25,17 +24,18 @@ print(SequenceClassifier.list_supported_models())
 ### CONFIGURATION
 MODEL_NAME = "distilbert-base-uncased"
 TO_LOWER = False
-BATCH_SIZE = 48
+BATCH_SIZE = 16
 
 TRAIN_DATA_USED_FRACTION = 1
 DEV_DATA_USED_FRACTION = 1
-NUM_EPOCHS = 2
+NUM_EPOCHS = 5
 WARMUP_STEPS= 2500
 
+QUICK_RUN = True
 if QUICK_RUN:
-    TRAIN_DATA_USED_FRACTION = 1
-    DEV_DATA_USED_FRACTION = 1
-    NUM_EPOCHS = 5
+    TRAIN_DATA_USED_FRACTION = .001
+    DEV_DATA_USED_FRACTION = .1
+    NUM_EPOCHS = 1
     WARMUP_STEPS= 10
 
 if not torch.cuda.is_available():
@@ -105,7 +105,6 @@ dev_dataloader_mismatched = processor.create_dataloader_from_df(
     max_len=MAX_SEQ_LENGTH,
     batch_size=BATCH_SIZE,
 )
-
 
 ### TRAINING
 classifier = SequenceClassifier(

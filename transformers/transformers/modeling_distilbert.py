@@ -37,6 +37,7 @@ from .file_utils import add_start_docstrings
 
 import pickle 
 import os 
+from functools import reduce
 
 import logging
 logger = logging.getLogger(__name__)
@@ -589,12 +590,14 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
 
         self.init_weights()
 
-        sub_path = os.join.path(os.getcwd(), '..', '..', 'Data', 'subspace.pkl')
+        sub_path = os.path.join(os.getcwd(), 'Data', 'subspace.pkl')
 
         with open(sub_path, 'rb') as f:
             self.subspace = pickle.load(f)
+        self.subspace = self.subspace.T[:768, :]
 
-        self.projection = self.subspace * np.linalg.inv(self.subspace.T * self.subspace) * self.subspace.T
+        self.projection = reduce(np.matmul, [self.subspace, np.linalg.inv(np.matmul(self.subspace.T, self.subspace)), self.subspace.T])
+        # print("PROJ SHAPE", self.projection.shape)
 
     def forward(self, input_ids,  attention_mask=None, head_mask=None, labels=None):
         distilbert_output = self.distilbert(input_ids=input_ids,
@@ -607,13 +610,16 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
         pooled_output = self.dropout(pooled_output)         # (bs, dim)
         logits = self.classifier(pooled_output)              # (bs, dim)
 
-        repeat_proj = np.expand_dims(self.projection, axis=0)
-
         bs = hidden_state.shape[0]
-
-        repeat_proj = torch.from_numpy(repeat_proj)
-
-        repeat_proj = repeat_proj.expand(bs, -1, -1)
+        seq_len = hidden_state.shape[1]
+        repeat_proj = torch.from_numpy(np.expand_dims(self.projection, axis=0)).to(hidden_state.device)
+        repeat_proj = repeat_proj.expand(seq_len, -1, -1)
+        # print("HERE", repeat_proj.shape)
+        emb_state = hidden_state.transpose(1, 0).transpose(2, 1) # now its seq_len x dim x bs
+        # print("EMB", emb_state.shape)
+        projected = torch.bmm(repeat_proj, emb_state)
+        # print("PROJECTED", projected.shape)
+        total = torch.sum(torch.norm(projected, dim=1))
 
         outputs = (logits,) + distilbert_output[1:]
         if labels is not None:
@@ -623,6 +629,7 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
             else:
                 loss_fct = nn.CrossEntropyLoss()
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+            loss += total
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
