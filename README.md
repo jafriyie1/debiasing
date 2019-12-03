@@ -32,3 +32,6 @@ Our folder structure should look like
         - `.../bert_entailment.py` training file
     - `nlp-recipes/utils_nlp` <- Can be a direct clone of the actual repo, or some sort of local install via PIP? So this folder may be optional
     - `transformers` <- This should be *our* fork of `huggingface/transformers`, which we will edit to change the loss function, etc.
+
+Alternatively:
+Put everything as subfolders in the `debiasing` root, and just delete all the `.git` stuff from within them
