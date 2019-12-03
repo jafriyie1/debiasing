@@ -111,7 +111,7 @@ dev_dataloader_mismatched = processor.create_dataloader_from_df(
 classifier = SequenceClassifier(
     model_name=MODEL_NAME, num_labels=num_labels, cache_dir=CACHE_DIR
 )
-torch.save(classifier.model.state_dict(), "./pretrained_{0}.pth".format(round(time.time()))))
+torch.save(classifier.model.state_dict(), "./pretrained_{0}.pth".format(round(time.time())))
 
 with Timer() as t:
     classifier.fit(
@@ -121,7 +121,7 @@ with Timer() as t:
             warmup_steps=WARMUP_STEPS,
         )
 print("Training time : {:.3f} hrs".format(t.interval / 3600))
-torch.save(classifier.model.state_dict(), "./trained_{0}.pth".format(round(time.time()))))
+torch.save(classifier.model.state_dict(), "./trained_{0}.pth".format(round(time.time())))
 
 ### PREDICTION
 with Timer() as t:
