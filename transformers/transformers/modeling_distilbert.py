@@ -590,11 +590,12 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
 
         self.init_weights()
 
-        sub_path = os.path.join(os.getcwd(), 'Data', 'subspace.pkl')
+        sub_path = os.path.join(os.getcwd(), 'Data', 'distilbert_subspace.pkl')
 
+        print("loading subspace....")
         with open(sub_path, 'rb') as f:
             self.subspace = pickle.load(f)
-        self.subspace = self.subspace.T[:768, :] # TODO: stop truncating once the source data is actually a BERT subspace
+        self.subspace = self.subspace.T # TODO: stop truncating once the source data is actually a BERT subspace
 
         self.projection = reduce(np.matmul, [self.subspace, np.linalg.inv(np.matmul(self.subspace.T, self.subspace)), self.subspace.T])
 
@@ -615,7 +616,10 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
         repeat_proj = repeat_proj.expand(seq_len, -1, -1)
         emb_state = hidden_state.transpose(1, 0).transpose(2, 1) # now its seq_len x dim x bs
         projected = torch.bmm(repeat_proj, emb_state)
-        total = torch.sum(torch.norm(projected, dim=1))
+        total = torch.mean(torch.norm(projected, dim=1))
+
+        total = 1e-4 * total
+        #print('yup')
 
         outputs = (logits,) + distilbert_output[1:]
         if labels is not None:
