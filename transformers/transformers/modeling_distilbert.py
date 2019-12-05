@@ -616,10 +616,7 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
         repeat_proj = repeat_proj.expand(seq_len, -1, -1)
         emb_state = hidden_state.transpose(1, 0).transpose(2, 1) # now its seq_len x dim x bs
         projected = torch.bmm(repeat_proj, emb_state)
-        total = torch.mean(torch.norm(projected, dim=1))
-
-        total = 1e-4 * total
-        #print('yup')
+        mean = torch.mean(torch.norm(projected, dim=1)) * 1e-3
 
         outputs = (logits,) + distilbert_output[1:]
         if labels is not None:
@@ -629,7 +626,7 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
             else:
                 loss_fct = nn.CrossEntropyLoss()
                 loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
-            loss += total
+            loss += mean
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)

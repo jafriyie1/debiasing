@@ -293,7 +293,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     '--lang', type=str, default='en', help='language to use')
 parser.add_argument('--model', type=str, default='n', help='use trained model (y or n)')
-parser.add_argument( '--load', type=str, default='n', help='use original subspace (y or n)')
+parser.add_argument('--load', type=str, default='n', help='use original subspace (y or n)')
 
 
 def main():
