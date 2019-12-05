@@ -24,7 +24,7 @@ print(SequenceClassifier.list_supported_models())
 ### CONFIGURATION
 MODEL_NAME = "distilbert-base-uncased"
 TO_LOWER = False
-BATCH_SIZE = 48
+BATCH_SIZE = 16
 
 TRAIN_DATA_USED_FRACTION = 1
 DEV_DATA_USED_FRACTION = 1
@@ -33,9 +33,9 @@ WARMUP_STEPS= 2500
 
 QUICK_RUN = True
 if QUICK_RUN:
-    TRAIN_DATA_USED_FRACTION = .5
+    TRAIN_DATA_USED_FRACTION = .01
     DEV_DATA_USED_FRACTION = .5
-    NUM_EPOCHS = 3
+    NUM_EPOCHS = 1
     WARMUP_STEPS= 10
 
 if not torch.cuda.is_available():

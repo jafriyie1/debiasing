@@ -66,21 +66,13 @@ def get_embedding_vec(tokenizer, tok_sent, indx, model):
 
     with torch.no_grad():
         encoded_layers = model(tokens_tensor, segments_tensors)
-
     return encoded_layers[0][0][indx]
 
 
-def create_subspace(lang, tr_model=None):
+def create_subspace(lang, model, tokenizer):
     bias_subspace = []
 
-    if tr_model is None:
-        model = DistilBertModel.from_pretrained('distilbert-base-uncased')
-    else:
-        model = tr_model
-
     model.eval()
-
-    tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
     
     pairs = LANG_SPECIFIC_DATA[lang]['pairs']
     pairs_two = LANG_SPECIFIC_DATA[lang]['pairs_two']
@@ -234,7 +226,7 @@ def get_vectors(elmo, word_list, lang):
 
 def train_kmeans(X, words, n_clus=2):
     sent2bert = KMeans(n_clusters=n_clus).fit(X)
-    labels = list(sents2elmo.labels_)
+    labels = list(sent2bert.labels_)
     corr_words_and_labels = list(zip(words, labels))
     words_labels_vecs = list(zip(words, X, labels))
     #corr_words_and_labels = sorted(corr_words_and_labels, key= lambda x: x[1])
@@ -265,11 +257,7 @@ def score_vectors(tokenizer, model, word_list, basis, lang):
         #vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent)
 
         score = 0
-        print(basis.shape)
         for b in basis:
-            print(b.shape)
-            print(b)
-            print(vec)
             score += np.dot(b, vec) / (norm(b) * norm(vec))
 
         #print(score)
@@ -321,12 +309,12 @@ def main():
     if opt.model == 'y':
         device = torch.device('cpu')
         n_model = SequenceClassifier(
-            model_name='distilbert-base-uncased', num_labels=3, cache_dir='../cache'
+            model_name='distilbert-base-uncased', num_labels=3, cache_dir='./cache'
         )
 
         con = DistilBertModel
 
-        state_dict = torch.load("Models/trained_1575450384.pth", map_location=device)
+        state_dict = torch.load("trained_1575511705.pth", map_location=device)
         # create new OrderedDict that does not contain `module. (To deal with pytorch bug)
         from collections import OrderedDict
         new_state_dict = OrderedDict()
@@ -334,13 +322,12 @@ def main():
             name = k[7:] # remove `module.`
             new_state_dict[name] = v
         # load params
-        n_model.model.load_state_dict(new_state_dict)
-
+        n_model.model.load_state_dict(state_dict)
+        model = n_model.model.distilbert
 
         print('loaded model')
     else:
         model = DistilBertModel.from_pretrained('distilbert-base-uncased')
-    model = n_model.model
     model.eval()
     tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
 
@@ -348,7 +335,7 @@ def main():
     no_gen_list = get_reg_words(data_path2)
 
     if opt.load == 'n':
-        basis = create_subspace(opt.lang)
+        basis = create_subspace(opt.lang, model, tokenizer)
     else:
         basis = load_subspace()
 
