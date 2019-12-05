@@ -592,7 +592,7 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
 
         sub_path = os.path.join(os.getcwd(), 'Data', 'distilbert_subspace.pkl')
 
-        print("loading subspace....")
+        #print("loading subspace....")
         with open(sub_path, 'rb') as f:
             self.subspace = pickle.load(f)
         self.subspace = self.subspace.T # TODO: stop truncating once the source data is actually a BERT subspace
