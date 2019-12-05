@@ -1,6 +1,4 @@
 from time import sleep
-from allennlp.commands.elmo import ElmoEmbedder
-from elmoformanylangs import Embedder
 import os
 import pandas as pd
 import numpy as np
@@ -9,10 +7,9 @@ from numpy.linalg import norm
 from scipy.linalg import orth
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-#import seaborn as sns
+
 import matplotlib
-#matplotlib.use( 'tkagg' , force=True)
-# print(matplotlib.get_backend())
+
 import matplotlib.pyplot as plt
 plt.switch_backend('tkagg')
 import random
@@ -20,8 +17,7 @@ from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
 import pickle 
 import sys
-sys.path.append(os.path.join('..', 'utils_nlp', 'models', 'transformers' , \
-                    ))
+sys.path.append(os.path.join('utils_nlp', 'models', 'transformers'))
 
 import torch
 from transformers import DistilBertTokenizer, DistilBertModel, DistilBertForSequenceClassification
@@ -34,8 +30,8 @@ import argparse
 
 LANG_SPECIFIC_DATA = {
     'en': {
-        'getEmbedding': lambda elmo, sent: elmo.embed_sentence(sent)[2][0],
-        'getEmbeddingProf': lambda elmo, sent: elmo.embed_sentence(sent)[2][1],
+        'getEmbedding': lambda bert, sent: bert.embed_sentence(sent)[2][0],
+        'getEmbeddingProf': lambda bert, sent: bert.embed_sentence(sent)[2][1],
         'pairs_two': [
             ["woman", "man"],
             ["girl", "boy"],
@@ -137,7 +133,7 @@ def load_subspace():
     print('original subspace was loaded')
     return subspace
 
-def get_gender_basis(elmo, lang):
+def get_gender_basis(bert, lang):
     bias_subspace = []
     pairs = LANG_SPECIFIC_DATA[lang]['pairs']
     pairs_two = LANG_SPECIFIC_DATA[lang]['pairs_two']
@@ -146,10 +142,10 @@ def get_gender_basis(elmo, lang):
     tok_sent_f = LANG_SPECIFIC_DATA[lang]['tok_sent'](female)
     tok_sent_m = LANG_SPECIFIC_DATA[lang]['tok_sent'](male)
 
-    vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent_f)
+    vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](bert, tok_sent_f)
     bias_subspace.append(vec)
 
-    vec2 = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent_m)
+    vec2 = LANG_SPECIFIC_DATA[lang]['getEmbedding'](bert, tok_sent_m)
     bias_subspace.append(vec2)
 
     for pair in pairs_two:
@@ -158,10 +154,10 @@ def get_gender_basis(elmo, lang):
         tok_sent_f = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](female)
         tok_sent_m = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](male)
 
-        vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent_f)
+        vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](bert, tok_sent_f)
         bias_subspace.append(vec)
 
-        vec2 = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent_m)
+        vec2 = LANG_SPECIFIC_DATA[lang]['getEmbedding'](bert, tok_sent_m)
         bias_subspace.append(vec2)
 
     bias_subspace = np.array(bias_subspace)
@@ -237,13 +233,13 @@ def get_vectors(elmo, word_list, lang):
 
 
 def train_kmeans(X, words, n_clus=2):
-    sents2elmo = KMeans(n_clusters=n_clus).fit(X)
+    sent2bert = KMeans(n_clusters=n_clus).fit(X)
     labels = list(sents2elmo.labels_)
     corr_words_and_labels = list(zip(words, labels))
     words_labels_vecs = list(zip(words, X, labels))
     #corr_words_and_labels = sorted(corr_words_and_labels, key= lambda x: x[1])
 
-    return sents2elmo, corr_words_and_labels, words_labels_vecs
+    return sent2bert, corr_words_and_labels, words_labels_vecs
 
 def gen_df(label_list, score_list):
     df_list = []
@@ -327,12 +323,11 @@ def main():
         n_model = SequenceClassifier(
             model_name='distilbert-base-uncased', num_labels=3, cache_dir='../cache'
         )
-        #n_model = model.model()
-        #torch.save(classifier.model.state_dict(), "Models/trained_1575450384.pth"
+
         con = DistilBertModel
 
         state_dict = torch.load("Models/trained_1575450384.pth", map_location=device)
-        # create new OrderedDict that does not contain `module.`
+        # create new OrderedDict that does not contain `module. (To deal with pytorch bug)
         from collections import OrderedDict
         new_state_dict = OrderedDict()
         for k, v in state_dict.items():
@@ -342,15 +337,12 @@ def main():
         n_model.model.load_state_dict(new_state_dict)
 
 
-        #n_model.DistilBertForSequenceClassification().load_state_dict(torch.load("Models/trained_1575450384.pth", map_location=device))
         print('loaded model')
     else:
         model = DistilBertModel.from_pretrained('distilbert-base-uncased')
     model = n_model.model
     model.eval()
     tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-
-
 
     stereo_list = get_stereotype_words(data_path)
     no_gen_list = get_reg_words(data_path2)
@@ -360,10 +352,9 @@ def main():
     else:
         basis = load_subspace()
 
-    #X_vecs, corr_word_list = get_vectors(elmo, stereo_list)
     X_vecs = proj_gen_space(tokenizer, model, stereo_list, basis, opt.lang)
-    #evaluate_projected_vectors(stereo_list, X_vecs)
-    sents2elmo, labeled_words, vecs_labels = train_kmeans(X_vecs, stereo_list, n_colors)
+
+    sent2bert, labeled_words, vecs_labels = train_kmeans(X_vecs, stereo_list, n_colors)
 
     if opt.load == 'n':
         train_svm(vecs_labels)
