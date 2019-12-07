@@ -41,6 +41,7 @@ class Transformer:
         num_labels=2,
         cache_dir=".",
         load_model_from_dir=None,
+        tokenizer=None
     ):
 
         if model_name not in self.list_supported_models():
@@ -62,6 +63,9 @@ class Transformer:
             self.model = model_class[model_name].from_pretrained(
                 load_model_from_dir, num_labels=num_labels, output_loading_info=False
             )
+        
+        if tokenizer:
+            self.model.tokenizer = tokenizer
 
     @property
     def model_name(self):

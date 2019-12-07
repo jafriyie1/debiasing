@@ -108,7 +108,7 @@ dev_dataloader_mismatched = processor.create_dataloader_from_df(
 
 ### TRAINING
 classifier = SequenceClassifier(
-    model_name=MODEL_NAME, num_labels=num_labels, cache_dir=CACHE_DIR
+    model_name=MODEL_NAME, num_labels=num_labels, cache_dir=CACHE_DIR, tokenizer=processor.tokenizer
 )
 torch.save(classifier.model.state_dict(), "./pretrained_{0}.pth".format(round(time.time())))
 

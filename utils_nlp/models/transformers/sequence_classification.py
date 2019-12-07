@@ -187,12 +187,13 @@ class Processor:
 
 
 class SequenceClassifier(Transformer):
-    def __init__(self, model_name="bert-base-cased", num_labels=2, cache_dir="."):
+    def __init__(self, model_name="bert-base-cased", num_labels=2, cache_dir=".", tokenizer=None):
         super().__init__(
             model_class=MODEL_CLASS,
             model_name=model_name,
             num_labels=num_labels,
             cache_dir=cache_dir,
+            tokenizer=tokenizer
         )
 
     @staticmethod
