@@ -45,7 +45,7 @@ def download_file_and_extract(local_cache_path: str = ".", file_split: str = "tr
         extract_zip(os.path.join(local_cache_path, file_name), local_cache_path)
 
 
-def load_pandas_df(local_cache_path=".", file_split="train"):
+def load_pandas_df(local_cache_path=".", file_split="train", genre_filter=None):
     """Loads extracted dataset into pandas
     Args:
         local_cache_path ([type], optional): [description]. Defaults to current working directory.
@@ -60,7 +60,13 @@ def load_pandas_df(local_cache_path=".", file_split="train"):
         download_file_and_extract(local_cache_path, file_split)
     except Exception as e:
         raise e
-    return pd.read_json(os.path.join(local_cache_path, DATA_FILES[file_split]), lines=True)
+    
+    data =  pd.read_json(os.path.join(local_cache_path, DATA_FILES[file_split]), lines=True)
+
+    if genre_filter:
+        data = data.loc[data['genre'] == genre_filter]
+
+    return data
 
 
 def get_generator(

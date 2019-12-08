@@ -590,7 +590,7 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
 
         self.init_weights()
 
-        sub_path = os.path.join(os.getcwd(), 'Data', 'distilbert_subspace.pkl')
+        sub_path = os.path.join(os.getcwd(), 'kmeans', 'distilbert_subspace.pkl')
 
         #print("loading subspace....")
         with open(sub_path, 'rb') as f:
@@ -598,7 +598,7 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
         self.subspace = self.subspace.T
 
         self.projection = reduce(np.matmul, [self.subspace, np.linalg.inv(np.matmul(self.subspace.T, self.subspace)), self.subspace.T])
-        self.threshold = 10
+        self.threshold = 0.5
 
     def forward(self, input_ids, attention_mask=None, head_mask=None, labels=None):
         # import pdb; pdb.set_trace()
@@ -612,16 +612,29 @@ class DistilBertForSequenceClassification(DistilBertPreTrainedModel):
         pooled_output = self.dropout(pooled_output)         # (bs, dim)
         logits = self.classifier(pooled_output)              # (bs, dim)
 
-        word_embeddings = hidden_state;#self.distilbert.embeddings.word_embeddings(input_ids)
+        word_embeddings = self.distilbert.embeddings.word_embeddings(input_ids)
         bs = word_embeddings.shape[0]
         seq_len = word_embeddings.shape[1]
-        repeat_proj = torch.from_numpy(np.expand_dims(self.projection, axis=0)).to(word_embeddings.device)
-        repeat_proj = repeat_proj.expand(seq_len, -1, -1)
         emb_state = word_embeddings.transpose(1, 0).transpose(2, 1) # now its seq_len x dim x bs
+        emb_full_norm = torch.norm(emb_state, p=2, dim=1)
+        emb_state.transpose(0, 1).div(emb_full_norm).transpose(0, 1)
+        emb_state = emb_state[1:-1]
+        repeat_proj = torch.from_numpy(np.expand_dims(self.projection, axis=0)).to(word_embeddings.device)
+        repeat_proj = repeat_proj.expand(seq_len-2, -1, -1)
         projected = torch.bmm(repeat_proj, emb_state)
         norms = torch.norm(projected, dim=1).transpose(0, 1) # has shape bs x seq_len
-        maxes = torch.max(norms, dim=0)
-        # print(maxes)
+        
+        # print("INPUT TOKENS", self.tokenizer.convert_ids_to_tokens(input_indices))
+        # import pdb; pdb.set_trace()
+        print("INPUTS")
+        sent = input_ids[-1, :]
+        indices = filter(lambda i: i.item() not in [self.tokenizer.cls_token_id, self.tokenizer.unk_token_id, self.tokenizer.pad_token_id], sent)
+        print(' '.join(self.tokenizer.convert_ids_to_tokens([i.item() for i in indices])))
+
+        maxes = torch.max(norms, dim=1)
+        input_indices = [input_ids[idx][maxes.indices[idx]].item() for idx in range(len(maxes))]
+        input_indices = filter(lambda i: i not in [self.tokenizer.cls_token_id, self.tokenizer.unk_token_id, self.tokenizer.pad_token_id], input_indices)
+        # print("Maximal tokens", self.tokenizer.convert_ids_to_tokens(input_indices), maxes.values.cpu().detach().numpy())
         indices = torch.where(norms > self.threshold)
         if len(indices[0]) > 0:
             print("INDICES", indices)

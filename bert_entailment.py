@@ -24,7 +24,7 @@ print(SequenceClassifier.list_supported_models())
 ### CONFIGURATION
 MODEL_NAME = "distilbert-base-uncased"
 TO_LOWER = False
-BATCH_SIZE = 16
+BATCH_SIZE = 17
 
 TRAIN_DATA_USED_FRACTION = 1
 DEV_DATA_USED_FRACTION = 1
@@ -33,7 +33,7 @@ WARMUP_STEPS= 2500
 
 QUICK_RUN = True
 if QUICK_RUN:
-    TRAIN_DATA_USED_FRACTION = .01
+    TRAIN_DATA_USED_FRACTION = .05
     DEV_DATA_USED_FRACTION = .5
     NUM_EPOCHS = 1
     WARMUP_STEPS= 10
@@ -55,10 +55,12 @@ TEXT_COL_2 = "sentence2"
 LABEL_COL = "gold_label"
 LABEL_COL_NUM = "gold_label_num"
 
+GENRE = 'fiction'
+
 ### Load Data
-train_df = load_pandas_df(local_cache_path=CACHE_DIR, file_split="train")
-dev_df_matched = load_pandas_df(local_cache_path=CACHE_DIR, file_split="dev_matched")
-dev_df_mismatched = load_pandas_df(local_cache_path=CACHE_DIR, file_split="dev_mismatched")
+train_df = load_pandas_df(local_cache_path=CACHE_DIR, file_split="train", genre_filter=GENRE)
+dev_df_matched = load_pandas_df(local_cache_path=CACHE_DIR, file_split="dev_matched", genre_filter=GENRE)
+dev_df_mismatched = load_pandas_df(local_cache_path=CACHE_DIR, file_split="dev_mismatched", genre_filter=GENRE)
 
 dev_df_matched = dev_df_matched.loc[dev_df_matched['gold_label'] != '-']
 dev_df_mismatched = dev_df_mismatched.loc[dev_df_mismatched['gold_label'] != '-']

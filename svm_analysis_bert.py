@@ -26,30 +26,46 @@ from utils_nlp.models.transformers.sequence_classification import Processor, Seq
 import numpy as np
 import pickle 
 import argparse
+import scipy
 
+
+def generate_example_from_occupation(x):
+    choices = [
+        (['They', 'have', 'been', 'an', x, 'for', 'many', 'years'], 4),
+        (['Today', ',', 'the', x, 'walked', 'down', 'the', 'street'], 3),
+        (['"', 'Yesterday', 'was', 'Tuesday', '"', ',', 'said', 'the', x], 8),
+        (['There', 'are', 'many', 'types', 'of', x], 5),
+        (['The', x, 'ate', 'an', 'apple', 'for', 'dinner'], 1)
+    ]
+    idx = np.random.choice(len(choices))
+    return choices[idx]
+
+def generate_example(x):
+    return ([x, "ate", "an", "apple", "for", "breakfast"], 0)
+
+def generate_trivial_example(x):
+    return ([x], 0)
 
 LANG_SPECIFIC_DATA = {
     'en': {
-        'getEmbedding': lambda bert, sent: bert.embed_sentence(sent)[2][0],
-        'getEmbeddingProf': lambda bert, sent: bert.embed_sentence(sent)[2][1],
-        'pairs_two': [
-            ["woman", "man"],
-            ["girl", "boy"],
-            ["mother", "father"],
-            ["daughter", "son"],
-            ["gal", "guy"],
-            ["female", "male"]
-        ],
+        'pairs_two': [  ],
+        #     ["woman", "man"],
+        #     ["girl", "boy"],
+        #     ["mother", "father"],
+        #     ["daughter", "son"],
+        #     ["gal", "guy"],
+        #     ["female", "male"],
+        #     ["lord", "lady"]
+        # ],
         'pairs': [['she', 'he']],
-        'tok_sent': lambda x: [x, "ate", "an", "apple", "for", "breakfast"],
-        'tok_sent_prof': lambda x: ['The', x, 'ate', 'an', 'apple', 'for', 'breakfast']
+        'tok_sent': generate_trivial_example,
+        'tok_sent_prof': generate_trivial_example
     }
 }
 
 def get_tokens(tokenizer, sent):
-    text = " ".join(sent)
+    text = " ".join(sent[0])
     marked_text = "[CLS] " + text + " [SEP]" 
-
     tokenized_text = tokenizer.tokenize(marked_text)
     print(tokenized_text)
     indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
@@ -60,14 +76,17 @@ def get_tokens(tokenizer, sent):
 
     return tokens_tensor, segments_tensors
 
-def get_embedding_vec(tokenizer, tok_sent, indx, model):
+def get_embedding_vec(tokenizer, tok_sent, model, singular=False):
     tokens_tensor, segments_tensors = \
         get_tokens(tokenizer, tok_sent)
 
     with torch.no_grad():
         encoded_layers = model(tokens_tensor, segments_tensors)
-    return encoded_layers[0][0][indx]
 
+    if singular:
+        indx = tok_sent[1] + 1
+
+    return encoded_layers[0][0][indx] if singular else encoded_layers[0][0][:]
 
 def create_subspace(lang, model, tokenizer):
     bias_subspace = []
@@ -81,12 +100,12 @@ def create_subspace(lang, model, tokenizer):
     tok_sent_f = LANG_SPECIFIC_DATA[lang]['tok_sent'](female)
     tok_sent_m = LANG_SPECIFIC_DATA[lang]['tok_sent'](male)
 
-    bias_em = get_embedding_vec(tokenizer, tok_sent_f, 0, model).numpy()
+    bias_em = get_embedding_vec(tokenizer, tok_sent_f, model, singular=True).numpy()
     bias_em = list(bias_em)
 
     bias_subspace.append(bias_em)
 
-    bias_em = get_embedding_vec(tokenizer, tok_sent_m, 0, model).numpy()
+    bias_em = get_embedding_vec(tokenizer, tok_sent_m, model, singular=True).numpy()
     bias_em = list(bias_em)
 
     bias_subspace.append(bias_em)
@@ -97,18 +116,19 @@ def create_subspace(lang, model, tokenizer):
         tok_sent_f = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](female)
         tok_sent_m = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](male)
 
-        vec = get_embedding_vec(tokenizer, tok_sent_f, 1, model).numpy()
+        vec = get_embedding_vec(tokenizer, tok_sent_f, model, singular=True).numpy()
         vec = list(vec)
 
         bias_subspace.append(vec)
 
-        vec2 =  get_embedding_vec(tokenizer, tok_sent_m, 1, model).numpy()
+        vec2 =  get_embedding_vec(tokenizer, tok_sent_m, model, singular=True).numpy()
         vec2 = list(vec2)
 
         bias_subspace.append(vec2)
 
     bias_subspace = np.array(bias_subspace)
     basis = bias_subspace
+    basis = scipy.linalg.orth(basis.transpose()).transpose()
 
     print('Saving subspace....')
     
@@ -125,43 +145,6 @@ def load_subspace():
     print('original subspace was loaded')
     return subspace
 
-def get_gender_basis(bert, lang):
-    bias_subspace = []
-    pairs = LANG_SPECIFIC_DATA[lang]['pairs']
-    pairs_two = LANG_SPECIFIC_DATA[lang]['pairs_two']
-    female, male = pairs[0]
-
-    tok_sent_f = LANG_SPECIFIC_DATA[lang]['tok_sent'](female)
-    tok_sent_m = LANG_SPECIFIC_DATA[lang]['tok_sent'](male)
-
-    vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](bert, tok_sent_f)
-    bias_subspace.append(vec)
-
-    vec2 = LANG_SPECIFIC_DATA[lang]['getEmbedding'](bert, tok_sent_m)
-    bias_subspace.append(vec2)
-
-    for pair in pairs_two:
-        female, male = pair
-
-        tok_sent_f = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](female)
-        tok_sent_m = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](male)
-
-        vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](bert, tok_sent_f)
-        bias_subspace.append(vec)
-
-        vec2 = LANG_SPECIFIC_DATA[lang]['getEmbedding'](bert, tok_sent_m)
-        bias_subspace.append(vec2)
-
-    bias_subspace = np.array(bias_subspace)
-    basis = bias_subspace
-
-    print('Saving subspace....')
-    with open('subspace.pkl', 'wb') as f:
-        pickle.dump(basis,f)
-
-    return basis
-
-
 def get_stereotype_words(path):
     df = pd.read_csv(path, sep='\t')
     adj_df_list = list(df.values.flatten())
@@ -177,19 +160,24 @@ def get_reg_words(path):
 
 def proj_gen_space(tokenizer, model, word_list, basis, lang):
     proj_vectors = []
+    tok_sentences = []
     for word in word_list:
         tok_sent = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](word)
-        vec = get_embedding_vec(tokenizer, tok_sent, 1, model)
+        vecs = np.array(get_embedding_vec(tokenizer, tok_sent, model))
 
         score = 0
-        new_vec = 0
-        for b in basis:
-            # print(b.size)
-            new_vec = (np.dot(b, vec) / norm(b)) * b
+        new_vecs = []
+        for v in vecs:
+            val = np.zeros(v.shape)
+            for b in basis:
+                # print(b.size)
+                val += np.dot(b, v) / norm(b) * b
+            new_vecs.append(val)
 
-        proj_vectors.append(new_vec)
+        proj_vectors.append(np.array(new_vecs))
+        tok_sentences.append(['[CLS]'] + tok_sent[0] + ['[SEP]'])
 
-    return proj_vectors
+    return np.array(proj_vectors), tok_sentences
 
 def pca_viz(X, words_labels, n_colors=2):
     from mpl_toolkits.mplot3d import Axes3D
@@ -211,18 +199,6 @@ def pca_viz(X, words_labels, n_colors=2):
     plt.show()
     # sleep(100)
     # plt.savefig('test.png')
-
-def get_vectors(elmo, word_list, lang):
-    vec_list = []
-    new_word_list = word_list
-
-    for word in word_list:
-        tok_sent = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](word)
-        vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent)
-        vec_list.append(vec)
-
-    return np.array(vec_list), new_word_list
-
 
 def train_kmeans(X, words, n_clus=2):
     sent2bert = KMeans(n_clusters=n_clus).fit(X)
@@ -253,7 +229,7 @@ def score_vectors(tokenizer, model, word_list, basis, lang):
 
     for word in word_list:
         tok_sent = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](word)
-        vec = get_embedding_vec(tokenizer, tok_sent, 1, model).numpy()
+        vec = get_embedding_vec(tokenizer, tok_sent, model, singular=True).numpy()
         #vec = LANG_SPECIFIC_DATA[lang]['getEmbedding'](elmo, tok_sent)
 
         score = 0
@@ -301,11 +277,8 @@ def main():
     opt = parser.parse_args()
     
     data_path = os.path.join(
-        os.getcwd(), 'gp_debias', 'wordlist', opt.lang, 'stereotype_list.tsv')
-    data_path2 = os.path.join(
-        os.getcwd(), 'gp_debias', 'wordlist', opt.lang, 'no_gender_list.tsv')
+        os.getcwd(), 'gp_debias', 'wordlist', opt.lang, 'occupation_stereotype_list.tsv')
 
-    
     if opt.model == 'y':
         device = torch.device('cpu')
         n_model = SequenceClassifier(
@@ -332,15 +305,21 @@ def main():
     tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
 
     stereo_list = get_stereotype_words(data_path)
-    no_gen_list = get_reg_words(data_path2)
 
     if opt.load == 'n':
         basis = create_subspace(opt.lang, model, tokenizer)
     else:
         basis = load_subspace()
 
-    X_vecs = proj_gen_space(tokenizer, model, stereo_list, basis, opt.lang)
-
+    X_vecs, sentences = proj_gen_space(tokenizer, model, stereo_list, basis, opt.lang)
+    # import pdb; pdb.set_trace()
+    import pprint
+    pp = pprint.PrettyPrinter(indent=2)
+    import pdb; pdb.set_trace()        
+    norms = norm(X_vecs, axis=2)
+    for i in range(len(sentences)):
+        pp.pprint(sorted(list(zip(norms[i], sentences[i])), key=lambda x: x[0]))
+    # pp.pprint(sorted(list(zip([norms[i][2] for i in range(norms.shape[0])], stereo_list)), key=lambda x: x[0]))
     sent2bert, labeled_words, vecs_labels = train_kmeans(X_vecs, stereo_list, n_colors)
 
     if opt.load == 'n':
