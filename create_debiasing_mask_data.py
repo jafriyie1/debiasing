@@ -4,6 +4,7 @@ import sys
 import select
 import argparse
 import json
+from mask_debias_dataset import STRIP_STR
 
 # Sample run command:
 # python create_debiasing_mask_data.py --output_file masked_training_data.jsonl --input_file ../realworldnlp/data/tatoeba/sentences.eng.200k.txt --definitional_words definitional_words.txt --start_idx 718
@@ -20,8 +21,6 @@ opt = parser.parse_args()
 
 outf = open(opt.output_file, 'a' if opt.append else 'w')
 inputf = open(opt.input_file, 'r')
-
-STRIP_STR = ' ,\'":./\n`'
 
 def clean_word(word):
     return word.lower().strip(STRIP_STR)
