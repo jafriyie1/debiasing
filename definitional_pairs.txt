@@ -3,3 +3,4 @@ he,she
 his,her
 man,woman
 men,women
+he's, she's
