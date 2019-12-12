@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=1)
-parser.add_argument('--epochs', type=int, default=1)
+parser.add_argument('--epochs', type=int, default=2)
 parser.add_argument('--lr', type=float, default=2e-5)
 
 args = parser.parse_args()
@@ -52,6 +52,7 @@ c_loss = torch.nn.CrossEntropyLoss()
 
 for epoch in range(args.epochs):
     tr_loss = 0
+    epoch_loss = 0
     for data in tqdm(train_data):
         model.train()
         optimizer.zero_grad()
@@ -120,7 +121,8 @@ for epoch in range(args.epochs):
 
         loss.backward()
         optimizer.step()
-    print("The loss at epoch {} is: {}".format(epoch+1, loss))
+        epoch_loss += loss.item()
+    print("The loss at epoch {} is: {}".format(epoch+1, epoch_loss))
 
 '''
 # Tokenize input
