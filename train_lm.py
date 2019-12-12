@@ -55,14 +55,14 @@ optimizer = AdamW(model.parameters(),
 c_loss = torch.nn.CrossEntropyLoss()
 
 for epoch in range(args.epochs):
-    loss = 0
+    tr_loss = 0
     for data in tqdm(train_data):
         model.train()
         optimizer.zero_grad()
         tup1, tup2, original = data 
-        def_masked, def_masked_tokens = tup1
+        def_masked, def_masked_tokens, def_idx = tup1
         def_masked_tokens = list(def_masked_tokens)
-        bias_masked, bias_masked_tokens = tup2 
+        bias_masked, bias_masked_tokens, bias_idx = tup2 
         bias_masked_tokens = list(bias_masked_tokens)
 
         def_masked = [tokenizer.tokenize(i) for i in def_masked]
@@ -70,43 +70,62 @@ for epoch in range(args.epochs):
         def_masked_tokens = [tokenizer.tokenize(i) for i in def_masked_tokens[0]]
         bias_masked = [tokenizer.tokenize(i) for i in bias_masked]
         bias_masked_tokens = [tokenizer.tokenize(i) for i in bias_masked_tokens[0]]
+        original = [tokenizer.tokenize(i) for i in original]
+
+        print(len(def_masked[0]))
+        print(len(bias_masked[0]))
+        print(len(original[0]))
 
         def_masked = [tokenizer.convert_tokens_to_ids(i) for i in def_masked]
         def_masked_tokens = [tokenizer.convert_tokens_to_ids(i) for i in def_masked_tokens]
         bias_masked = [tokenizer.convert_tokens_to_ids(i) for i in bias_masked]
         bias_masked_tokens = [tokenizer.convert_tokens_to_ids(i) for i in bias_masked_tokens]
+        original = [tokenizer.convert_tokens_to_ids(i) for i in original]
+
+        #print(def_masked)
+        #print(original)
 
     
 
-        print('yup', def_masked[0])
+        #print('yup', def_masked[0])
 
-        print('Transform', tokenizer.convert_tokens_to_ids(def_masked[0]))
+        #print('Transform', tokenizer.convert_tokens_to_ids(def_masked[0]))
         #def_masked_tokens = tokenizer.convert_tokens_to_ids(def_masked_tokens)
         #bias_masked = tokenizer.convert_tokens_to_ids(bias_masked)
         #bias_masked_tokens = tokenizer.convert_tokens_to_ids(bias_masked_tokens)
 
-        segments_ids_def  =  [0 for _ in range(len(def_masked))]
-        segments_ids_bias = [0 for _ in range(len(bias_masked))]
+        segments_ids_def  =  [1 for _ in range(len(def_masked[0]))]
+        segments_ids_bias = [1 for _ in range(len(bias_masked[0]))]
+
+        print(len(segments_ids_def))
 
         def_masked = torch.tensor(def_masked)
         def_masked_tokens = torch.tensor(def_masked_tokens)
         bias_masked = torch.tensor(bias_masked)
         bias_masked_tokens = torch.tensor(bias_masked_tokens)
+        original = torch.tensor(original)
 
         segments_tensors_def = torch.tensor([segments_ids_def])
-        segments_tensors_bias = torch.tensor([segments_ids_bias])
+        
+        segments_tensors_bias = torch.tensor(segments_ids_bias)
+        print(original.size())
+        print(bias_masked.size())
+        #print(segments_ids_bias.size())
+        if len(original[0]) == len(def_masked[0]):
+            outputs = model(original, masked_lm_labels = def_masked)
+            predictions = outputs[1]
+            loss = outputs[0]
+            tr_loss += loss
 
-        outputs = model(def_masked, segments_tensors_def)
-        predictions = outputs
-        print(def_masked)
-        print(predictions)
-        print(predictions.size())
-        loss += c_loss(predictions, def_masked_tokens)
-        outputs = model(bias_masked, segments_tensors_bias)
-        predictions = outputs[0]
-        loss += c_loss(predictions, def_masked_tokens)
 
-        loss.backward()
+        #loss += c_loss(predictions, def_masked_tokens)
+        if len(original[0]) == len(bias_masked[0]):
+            outputs = model(original, masked_lm_labels = bias_masked)
+            predictions = outputs[1]
+            tr_loss += outputs[0]
+            #loss += c_loss(predictions, def_masked_tokens)
+
+        tr_loss.backward(retain_graph=True)
         optimizer.step()
 
 
