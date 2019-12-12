@@ -57,7 +57,7 @@ for epoch in range(args.epochs):
         optimizer.zero_grad()
         tup1, tup2, original = data 
         def_masked, def_masked_words, def_idx = tup1
-        bias_masked, bias_pair_masked, bias_idx = tup2 
+        bias_masked, bias_pair_masked, bias_masked_token, bias_idx = tup2 
 
         def_masked = [tokenizer.tokenize(i) for i in def_masked]
         bias_masked = [tokenizer.tokenize(i) for i in bias_masked]
@@ -94,27 +94,31 @@ for epoch in range(args.epochs):
         # Get the predictions when masking definitional words, and compute loss:
         outputs = model(def_masked)
         predictions = outputs[0]
-        import pdb; pdb.set_trace()
-        loss = 0
-        
+
+        loss = torch.tensor([0.0])
+
         for def_mask_idx in def_mask_indices:
             pair_scores = predictions[0][def_mask_idx][word_pair_indices]
             # Now add this to loss
-            loss += pair_scores[0] - pair_scores[1]
+            loss += torch.flatten(torch.abs(pair_scores[0] - pair_scores[1]))
 
-
-        # TODO FINISH THIS
         # Get the predictions when masking potentially biased words, and compute loss:
-        # outputs = model(bias_masked)
-        # predictions = outputs[0]
-        # # assume the beginning is always batch index, and assume batch size is always 1
-        # bias_mask_indices = bias_mask_indices[1]
-        # bias_score = 
+        biased_word_id = tokenizer.convert_tokens_to_ids(bias_masked_token)
 
-        # bias_pair_mask_indices = bias_pair_mask_indices[1]
-        # import pdb; pdb.set_trace()
-        # Now add this to loss
+        outputs = model(bias_masked)
+        predictions = outputs[0]
+        # assume the beginning is always batch index, and assume batch size is always 1
+        bias_mask_index = bias_mask_indices[1][0]
+        true_score = predictions[0][bias_mask_index][biased_word_id]
 
+        bias_pair_mask_index = bias_pair_mask_indices[1][0]
+        outputs = model(bias_pair_masked)
+        predictions = outputs[0]
+        pair_score = predictions[0][bias_pair_mask_index][biased_word_id]
+
+        loss += torch.abs(true_score - pair_score)
+
+        loss.backward()
         optimizer.step()
     print("The loss at epoch {} is: {}".format(epoch+1, loss))
 

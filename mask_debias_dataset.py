@@ -47,7 +47,7 @@ class MaskDebiasingDataset():
         bias_pair_masked = ' '.join(bias_pair_tokens)
 
         return ((definitional_masked, definitional_masked_tokens, def_idx), 
-                (bias_masked, bias_pair_masked, bias_idx),
+                (bias_masked, bias_pair_masked, bias_masked_token, bias_idx),
                      original)
 
     def get_pair(self, word):
