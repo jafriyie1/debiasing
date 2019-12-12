@@ -16,6 +16,7 @@ parser.add_argument('--append', type=bool, help='whether or not to append to exi
 parser.add_argument('--input_file', type=str, help='file with newline separated input sentences to process', required=True)
 parser.add_argument('--start_idx', type=int, help='index in input file to start it, in case some has already been processed')
 parser.add_argument('--definitional_words', type=str, help='path to a file containing definitionally gendered words we should look for', required=False)
+parser.add_argument('--sentence_filter_file', type=str, help='newline delimeted filters for sentences')
 
 opt = parser.parse_args()
 
@@ -100,6 +101,12 @@ if opt.definitional_words:
         for w in f:
             definitional_words.append(clean_word(w))
 
+sentence_filters = set()
+if opt.sentence_filter_file:
+    with open(opt.sentence_filter_file) as f:
+        for w in f:
+            sentence_filters.add(clean_word(w))
+
 index = 0
 while(inputf.readable() and index < 10000):
     sentence = sentence_getter()
@@ -114,6 +121,12 @@ while(inputf.readable() and index < 10000):
     # respect definitional_words
     if len(definitional_words) > 0:
         if not contains_words(sentence, definitional_words):
+            index += 1
+            continue
+
+    # respect sentence_filters
+    if len(sentence_filters) > 0:
+        if not contains_words(sentence, sentence_filters):
             index += 1
             continue
 
