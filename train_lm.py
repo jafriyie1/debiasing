@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 
 # Load pre-trained model tokenizer (vocabulary)
 tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-dataset = MaskDebiasingDataset('masked_training_data.jsonl')
+dataset = MaskDebiasingDataset('masked_training_data.jsonl', 'definitional_pairs.txt', tokenizer.mask_token)
 model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
 print(len(dataset))
 
@@ -48,10 +48,6 @@ optimizer = AdamW(model.parameters(),
                     lr=args.lr, 
                     correct_bias=False)
 
-
-
-
-
 c_loss = torch.nn.CrossEntropyLoss()
 
 for epoch in range(args.epochs):
@@ -60,76 +56,66 @@ for epoch in range(args.epochs):
         model.train()
         optimizer.zero_grad()
         tup1, tup2, original = data 
-        def_masked, def_masked_tokens, def_idx = tup1
-        def_masked_tokens = list(def_masked_tokens)
-        bias_masked, bias_masked_tokens, bias_idx = tup2 
-        bias_masked_tokens = list(bias_masked_tokens)
+        def_masked, def_masked_words, def_idx = tup1
+        bias_masked, bias_pair_masked, bias_idx = tup2 
 
         def_masked = [tokenizer.tokenize(i) for i in def_masked]
-        print(def_masked_tokens)
-        def_masked_tokens = [tokenizer.tokenize(i) for i in def_masked_tokens[0]]
         bias_masked = [tokenizer.tokenize(i) for i in bias_masked]
-        bias_masked_tokens = [tokenizer.tokenize(i) for i in bias_masked_tokens[0]]
+        bias_pair_masked = [tokenizer.tokenize(i) for i in bias_pair_masked]
         original = [tokenizer.tokenize(i) for i in original]
 
-        print(len(def_masked[0]))
-        print(len(bias_masked[0]))
-        print(len(original[0]))
-
         def_masked = [tokenizer.convert_tokens_to_ids(i) for i in def_masked]
-        def_masked_tokens = [tokenizer.convert_tokens_to_ids(i) for i in def_masked_tokens]
         bias_masked = [tokenizer.convert_tokens_to_ids(i) for i in bias_masked]
-        bias_masked_tokens = [tokenizer.convert_tokens_to_ids(i) for i in bias_masked_tokens]
+        bias_pair_masked = [tokenizer.convert_tokens_to_ids(i) for i in bias_pair_masked]
         original = [tokenizer.convert_tokens_to_ids(i) for i in original]
 
-        #print(def_masked)
-        #print(original)
-
-    
-
-        #print('yup', def_masked[0])
-
-        #print('Transform', tokenizer.convert_tokens_to_ids(def_masked[0]))
-        #def_masked_tokens = tokenizer.convert_tokens_to_ids(def_masked_tokens)
-        #bias_masked = tokenizer.convert_tokens_to_ids(bias_masked)
-        #bias_masked_tokens = tokenizer.convert_tokens_to_ids(bias_masked_tokens)
-
-        segments_ids_def  =  [1 for _ in range(len(def_masked[0]))]
+        segments_ids_def = [1 for _ in range(len(def_masked[0]))]
         segments_ids_bias = [1 for _ in range(len(bias_masked[0]))]
 
-        print(len(segments_ids_def))
-
         def_masked = torch.tensor(def_masked)
-        def_masked_tokens = torch.tensor(def_masked_tokens)
         bias_masked = torch.tensor(bias_masked)
-        bias_masked_tokens = torch.tensor(bias_masked_tokens)
+        bias_pair_masked = torch.tensor(bias_pair_masked)
         original = torch.tensor(original)
+        def_mask_indices = torch.where(def_masked == tokenizer.mask_token_id)
+        bias_mask_indices = torch.where(bias_masked == tokenizer.mask_token_id)
+        bias_pair_mask_indices = torch.where(bias_pair_masked == tokenizer.mask_token_id)
 
         segments_tensors_def = torch.tensor([segments_ids_def])
-        
         segments_tensors_bias = torch.tensor(segments_ids_bias)
-        print(original.size())
-        print(bias_masked.size())
-        #print(segments_ids_bias.size())
-        if len(original[0]) == len(def_masked[0]):
-            outputs = model(original, masked_lm_labels = def_masked)
-            predictions = outputs[1]
-            loss = outputs[0]
-            tr_loss += loss
+
+        # assume the beginning is always batch index, and assume batch size is always 1
+        def_mask_indices = def_mask_indices[1]
+        def_masked_words = def_masked_words[0]
+        
+        # Get the definitional word pair for this example
+        word_pairs = [(w, dataset.get_pair(w)) for w in def_masked_words] # this assumes batch_size of 1
+        word_pair_indices = [tokenizer.convert_tokens_to_ids(w) for w in word_pairs] 
+
+        # Get the predictions when masking definitional words, and compute loss:
+        outputs = model(def_masked)
+        predictions = outputs[0]
+        import pdb; pdb.set_trace()
+        loss = 0
+        
+        for def_mask_idx in def_mask_indices:
+            pair_scores = predictions[0][def_mask_idx][word_pair_indices]
+            # Now add this to loss
+            loss += pair_scores[0] - pair_scores[1]
 
 
-        #loss += c_loss(predictions, def_masked_tokens)
-        if len(original[0]) == len(bias_masked[0]):
-            outputs = model(original, masked_lm_labels = bias_masked)
-            predictions = outputs[1]
-            tr_loss += outputs[0]
-            #loss += c_loss(predictions, def_masked_tokens)
+        # TODO FINISH THIS
+        # Get the predictions when masking potentially biased words, and compute loss:
+        # outputs = model(bias_masked)
+        # predictions = outputs[0]
+        # # assume the beginning is always batch index, and assume batch size is always 1
+        # bias_mask_indices = bias_mask_indices[1]
+        # bias_score = 
 
-        tr_loss.backward(retain_graph=True)
+        # bias_pair_mask_indices = bias_pair_mask_indices[1]
+        # import pdb; pdb.set_trace()
+        # Now add this to loss
+
         optimizer.step()
-
-
-        #print(data)
     print("The loss at epoch {} is: {}".format(epoch+1, loss))
 
 '''
@@ -150,8 +136,6 @@ segments_ids = [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1]
 # Convert inputs to PyTorch tensors
 tokens_tensor = torch.tensor([indexed_tokens])
 segments_tensors = torch.tensor([segments_ids])
-
-
 
 # Load pre-trained model (weights)
 model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
