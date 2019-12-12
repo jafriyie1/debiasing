@@ -9,7 +9,7 @@ import argparse
 from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--batch_size', type=int, default=2)
+parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--epochs', type=int, default=1)
 parser.add_argument('--lr', type=float, default=2e-5)
 
