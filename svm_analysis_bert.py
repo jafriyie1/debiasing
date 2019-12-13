@@ -11,7 +11,6 @@ from sklearn.decomposition import PCA
 import matplotlib
 
 import matplotlib.pyplot as plt
-plt.switch_backend('tkagg')
 import random
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
@@ -27,7 +26,6 @@ import numpy as np
 import pickle 
 import argparse
 import scipy
-
 
 def generate_example_from_occupation(x):
     choices = [
@@ -48,25 +46,25 @@ def generate_trivial_example(x):
 
 LANG_SPECIFIC_DATA = {
     'en': {
-        'pairs_two': [  ],
-        #     ["woman", "man"],
-        #     ["girl", "boy"],
-        #     ["mother", "father"],
-        #     ["daughter", "son"],
-        #     ["gal", "guy"],
-        #     ["female", "male"],
-        #     ["lord", "lady"]
-        # ],
+        'pairs_two': [
+            ["woman", "man"],
+            ["girl", "boy"],
+            ["mother", "father"],
+            ["daughter", "son"],
+            ["gal", "guy"],
+            ["female", "male"],
+            ["lord", "lady"]
+        ],
         'pairs': [['she', 'he']],
         'tok_sent': generate_trivial_example,
-        'tok_sent_prof': generate_trivial_example
+        'tok_sent_prof': generate_example_from_occupation
     }
 }
 
 def get_tokens(tokenizer, sent):
     text = " ".join(sent[0])
-    marked_text = "[CLS] " + text + " [SEP]" 
-    tokenized_text = tokenizer.tokenize(marked_text)
+    # marked_text = "[CLS] " + text + " [SEP]" 
+    tokenized_text = tokenizer.tokenize(text)
     print(tokenized_text)
     indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_text)
     segments_ids = [1] * len(tokenized_text)
@@ -77,16 +75,16 @@ def get_tokens(tokenizer, sent):
     return tokens_tensor, segments_tensors
 
 def get_embedding_vec(tokenizer, tok_sent, model, singular=False):
-    tokens_tensor, segments_tensors = \
-        get_tokens(tokenizer, tok_sent)
+    tokens_tensor, segments_tensors = get_tokens(tokenizer, tok_sent)
 
     with torch.no_grad():
         encoded_layers = model(tokens_tensor, segments_tensors)
 
     if singular:
-        indx = tok_sent[1] + 1
+        indx = tok_sent[1]
+        return encoded_layers[0][0][indx]
 
-    return encoded_layers[0][0][indx] if singular else encoded_layers[0][0][:]
+    return encoded_layers[0][0][:]
 
 def create_subspace(lang, model, tokenizer):
     bias_subspace = []
@@ -100,14 +98,9 @@ def create_subspace(lang, model, tokenizer):
     tok_sent_f = LANG_SPECIFIC_DATA[lang]['tok_sent'](female)
     tok_sent_m = LANG_SPECIFIC_DATA[lang]['tok_sent'](male)
 
-    bias_em = get_embedding_vec(tokenizer, tok_sent_f, model, singular=True).numpy()
-    bias_em = list(bias_em)
-
-    bias_subspace.append(bias_em)
-
-    bias_em = get_embedding_vec(tokenizer, tok_sent_m, model, singular=True).numpy()
-    bias_em = list(bias_em)
-
+    f_vec = get_embedding_vec(tokenizer, tok_sent_f, model, singular=True).numpy()
+    m_vec = get_embedding_vec(tokenizer, tok_sent_m, model, singular=True).numpy()
+    bias_em = f_vec - m_vec
     bias_subspace.append(bias_em)
 
     for pair in pairs_two:
@@ -116,15 +109,10 @@ def create_subspace(lang, model, tokenizer):
         tok_sent_f = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](female)
         tok_sent_m = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](male)
 
-        vec = get_embedding_vec(tokenizer, tok_sent_f, model, singular=True).numpy()
-        vec = list(vec)
-
-        bias_subspace.append(vec)
-
-        vec2 =  get_embedding_vec(tokenizer, tok_sent_m, model, singular=True).numpy()
-        vec2 = list(vec2)
-
-        bias_subspace.append(vec2)
+        f_vec = get_embedding_vec(tokenizer, tok_sent_f, model, singular=True).numpy()
+        m_vec =  get_embedding_vec(tokenizer, tok_sent_m, model, singular=True).numpy()
+        bias_em = f_vec - m_vec
+        bias_subspace.append(bias_em)
 
     bias_subspace = np.array(bias_subspace)
     basis = bias_subspace
@@ -164,23 +152,34 @@ def proj_gen_space(tokenizer, model, word_list, basis, lang):
     for word in word_list:
         tok_sent = LANG_SPECIFIC_DATA[lang]['tok_sent_prof'](word)
         vecs = np.array(get_embedding_vec(tokenizer, tok_sent, model))
+        full_tok = tok_sent[0]
 
         score = 0
         new_vecs = []
-        for v in vecs:
+        for idx in range(len(vecs)):
+            v = vecs[idx]
+            v = v / norm(v)
             val = np.zeros(v.shape)
             for b in basis:
-                # print(b.size)
                 val += np.dot(b, v) / norm(b) * b
             new_vecs.append(val)
 
         proj_vectors.append(np.array(new_vecs))
-        tok_sentences.append(['[CLS]'] + tok_sent[0] + ['[SEP]'])
-
-    return np.array(proj_vectors), tok_sentences
+        tok_sentences.append(tok_sent)
+    
+    max_len = max([len(proj) for proj in proj_vectors])
+    proj_padded = np.zeros((len(proj_vectors), max_len, proj_vectors[0].shape[1]))
+    for idx in range(len(proj_vectors)):
+        p = proj_vectors[idx]
+        proj_padded[idx][0:p.shape[0], 0:p.shape[1]] = p
+    return proj_padded, tok_sentences
 
 def pca_viz(X, words_labels, n_colors=2):
     from mpl_toolkits.mplot3d import Axes3D
+    
+    u, s, v = np.linalg.svd(X)
+
+    print(s[:5])
 
     pca = PCA(n_components=3)
     pca_results = pca.fit_transform(X)
@@ -188,9 +187,7 @@ def pca_viz(X, words_labels, n_colors=2):
     fig = plt.figure()
     ax = fig.gca(projection='3d')
 
-    ax.scatter(pca_results[:, 0], pca_results[:, 1], pca_results[:, 2],
-               c=labels, edgecolor='none', alpha=0.5,
-               cmap=plt.cm.get_cmap('Accent', n_colors))
+    ax.scatter(pca_results[:, 0], pca_results[:, 1], pca_results[:, 2])
 
     plt.xlabel('component 1')
     plt.ylabel('component 2')
@@ -235,8 +232,6 @@ def score_vectors(tokenizer, model, word_list, basis, lang):
         score = 0
         for b in basis:
             score += np.dot(b, vec) / (norm(b) * norm(vec))
-
-        #print(score)
 
         score_list.append((word, score))
 
@@ -312,21 +307,23 @@ def main():
         basis = load_subspace()
 
     X_vecs, sentences = proj_gen_space(tokenizer, model, stereo_list, basis, opt.lang)
-    # import pdb; pdb.set_trace()
+    norms = norm(X_vecs, axis=2)
     import pprint
     pp = pprint.PrettyPrinter(indent=2)
-    import pdb; pdb.set_trace()        
-    norms = norm(X_vecs, axis=2)
     for i in range(len(sentences)):
-        pp.pprint(sorted(list(zip(norms[i], sentences[i])), key=lambda x: x[0]))
-    # pp.pprint(sorted(list(zip([norms[i][2] for i in range(norms.shape[0])], stereo_list)), key=lambda x: x[0]))
-    sent2bert, labeled_words, vecs_labels = train_kmeans(X_vecs, stereo_list, n_colors)
+        pp.pprint(sorted(list(zip(norms[i], sentences[i][0])), key=lambda x: x[0]))
 
-    if opt.load == 'n':
-        train_svm(vecs_labels)
+    stereo_vecs = np.zeros((X_vecs.shape[0], X_vecs.shape[2]))
+    for s in range(len(sentences)):
+        stereo_vecs[s] = X_vecs[s, sentences[s][1], :]
+
+    sent2bert, labeled_words, vecs_labels = train_kmeans(stereo_vecs, stereo_list, n_colors)
+
+    # if opt.load == 'n':
+    train_svm(vecs_labels)
 
     print(sorted(labeled_words, key=lambda x: x[1]))
-    pca_viz(X_vecs, labeled_words, n_colors)
+    pca_viz(stereo_vecs, labeled_words, n_colors)
     scores = score_vectors(tokenizer, model, stereo_list, basis, opt.lang)
     #print(scores)
     stereo_scores = list(reversed(sorted(scores, key=lambda x: x[1])))
