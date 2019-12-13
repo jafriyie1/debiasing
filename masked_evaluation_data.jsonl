@@ -1,1 +1,5 @@
 {"sentence": "The doctor shook her head", "definitional": [3], "bias": 1 }
+{"sentence": "The firefighter ran back to her house", "definitional": [5], "bias": 1 }
+{"sentence": "The banker wrote with his pen", "definitional": [4], "bias": 1 }
+{"sentence": "The secretary wrote with his computer", "definitional": [4], "bias": 1 }
+{"sentence": "She was the best banker in the region", "definitional": [0], "bias": 4 }
