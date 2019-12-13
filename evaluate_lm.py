@@ -11,11 +11,11 @@ from helpers import get_input
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, help='model to evaluate')
-
+parser.add_argument('--evaluation_data', type=str, help='evaluation data', default='masked_evaluation_data.jsonl')
 args = parser.parse_args()
 
 tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
-dataset = MaskDebiasingDataset('masked_evaluation_data.jsonl', 'definitional_pairs.txt', tokenizer.mask_token)
+dataset = MaskDebiasingDataset(args.evaluation_data, 'definitional_pairs.txt', tokenizer.mask_token)
 model = DistilBertForMaskedLM.from_pretrained('distilbert-base-uncased')
 if args.model:
     model.load_state_dict(torch.load(args.model))
