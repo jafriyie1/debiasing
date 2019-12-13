@@ -7,11 +7,13 @@ from mask_debias_dataset import MaskDebiasingDataset
 from torch.utils.data import DataLoader, Dataset, random_split
 import argparse 
 from tqdm import tqdm
+from helpers import get_input
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=1)
 parser.add_argument('--epochs', type=int, default=2)
 parser.add_argument('--lr', type=float, default=2e-5)
+parser.add_argument('--save', type=str, default='trained_lm.pth')
 
 args = parser.parse_args()
 
@@ -60,29 +62,17 @@ for epoch in range(args.epochs):
         def_masked, def_masked_words, def_idx = tup1
         bias_masked, bias_pair_masked, bias_masked_token, bias_idx = tup2 
 
-        def_masked = [tokenizer.tokenize(i) for i in def_masked]
-        bias_masked = [tokenizer.tokenize(i) for i in bias_masked]
-        bias_pair_masked = [tokenizer.tokenize(i) for i in bias_pair_masked]
-        original = [tokenizer.tokenize(i) for i in original]
-
-        def_masked = [tokenizer.convert_tokens_to_ids(i) for i in def_masked]
-        bias_masked = [tokenizer.convert_tokens_to_ids(i) for i in bias_masked]
-        bias_pair_masked = [tokenizer.convert_tokens_to_ids(i) for i in bias_pair_masked]
-        original = [tokenizer.convert_tokens_to_ids(i) for i in original]
-
         segments_ids_def = [1 for _ in range(len(def_masked[0]))]
         segments_ids_bias = [1 for _ in range(len(bias_masked[0]))]
 
-        def_masked = torch.tensor(def_masked)
-        bias_masked = torch.tensor(bias_masked)
-        bias_pair_masked = torch.tensor(bias_pair_masked)
-        original = torch.tensor(original)
-        def_mask_indices = torch.where(def_masked == tokenizer.mask_token_id)
-        bias_mask_indices = torch.where(bias_masked == tokenizer.mask_token_id)
-        bias_pair_mask_indices = torch.where(bias_pair_masked == tokenizer.mask_token_id)
+        def_input = get_input(tokenizer, def_masked)
+        bias_input = get_input(tokenizer, bias_masked)
+        bias_pair_input = get_input(tokenizer, bias_pair_masked)
+        original_input = get_input(tokenizer, original)
 
-        segments_tensors_def = torch.tensor([segments_ids_def])
-        segments_tensors_bias = torch.tensor(segments_ids_bias)
+        def_mask_indices = torch.where(def_input == tokenizer.mask_token_id)
+        bias_mask_indices = torch.where(bias_input == tokenizer.mask_token_id)
+        bias_pair_mask_indices = torch.where(bias_pair_input == tokenizer.mask_token_id)
 
         # assume the beginning is always batch index, and assume batch size is always 1
         def_mask_indices = def_mask_indices[1]
@@ -93,7 +83,7 @@ for epoch in range(args.epochs):
         word_pair_indices = [tokenizer.convert_tokens_to_ids(w) for w in word_pairs] 
 
         # Get the predictions when masking definitional words, and compute loss:
-        outputs = model(def_masked)
+        outputs = model(def_input)
         predictions = outputs[0]
 
         loss = torch.tensor([0.0])
@@ -106,14 +96,14 @@ for epoch in range(args.epochs):
         # Get the predictions when masking potentially biased words, and compute loss:
         biased_word_id = tokenizer.convert_tokens_to_ids(bias_masked_token)
 
-        outputs = model(bias_masked)
+        outputs = model(bias_input)
         predictions = outputs[0]
         # assume the beginning is always batch index, and assume batch size is always 1
         bias_mask_index = bias_mask_indices[1][0]
         true_score = predictions[0][bias_mask_index][biased_word_id]
 
         bias_pair_mask_index = bias_pair_mask_indices[1][0]
-        outputs = model(bias_pair_masked)
+        outputs = model(bias_pair_input)
         predictions = outputs[0]
         pair_score = predictions[0][bias_pair_mask_index][biased_word_id]
 
@@ -124,6 +114,7 @@ for epoch in range(args.epochs):
         epoch_loss += loss.item()
     print("The loss at epoch {} is: {}".format(epoch+1, epoch_loss))
 
+torch.save(model.state_dict(), args.save)
 '''
 # Tokenize input
 text = "[CLS] Who was Jim Henson ? [SEP] Jim Henson was a puppeteer [SEP]"
