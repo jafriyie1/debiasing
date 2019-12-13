@@ -91,7 +91,7 @@ for epoch in range(args.epochs):
         for def_mask_idx in def_mask_indices:
             pair_scores = predictions[0][def_mask_idx][word_pair_indices]
             # Now add this to loss
-            loss += torch.flatten(torch.abs(pair_scores[0] - pair_scores[1]))
+            loss += torch.flatten(torch.abs(pair_scores[0] - pair_scores[1])) / abs(torch.max(pair_scores, dim=0)[0])
 
         # Get the predictions when masking potentially biased words, and compute loss:
         biased_word_id = tokenizer.convert_tokens_to_ids(bias_masked_token)
@@ -107,7 +107,7 @@ for epoch in range(args.epochs):
         predictions = outputs[0]
         pair_score = predictions[0][bias_pair_mask_index][biased_word_id]
 
-        loss += torch.abs(true_score - pair_score)
+        loss += torch.abs(true_score - pair_score) / abs(max([true_score, pair_score]))
 
         loss.backward()
         optimizer.step()
