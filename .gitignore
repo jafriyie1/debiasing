@@ -1,4 +1,5 @@
 analysis.csv
+*.pth
 **/*.pyc
 cache/
 /transformers
