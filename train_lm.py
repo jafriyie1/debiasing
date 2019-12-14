@@ -7,6 +7,7 @@ from mask_debias_dataset import MaskDebiasingDataset
 from torch.utils.data import DataLoader, Dataset, random_split
 import argparse 
 from tqdm import tqdm
+import random
 from helpers import get_input
 
 parser = argparse.ArgumentParser()
@@ -52,6 +53,8 @@ optimizer = AdamW(model.parameters(),
 
 c_loss = torch.nn.CrossEntropyLoss()
 
+BIAS_LOSS_WEIGHT = 1e-2
+
 for epoch in range(args.epochs):
     tr_loss = 0
     epoch_loss = 0
@@ -74,6 +77,15 @@ for epoch in range(args.epochs):
         bias_mask_indices = torch.where(bias_input == tokenizer.mask_token_id)
         bias_pair_mask_indices = torch.where(bias_pair_input == tokenizer.mask_token_id)
 
+        loss = torch.tensor([0.0])
+        # First, cross-entropy loss for masking out some random word in the sentence
+        mask_idx = random.randint(0, original_input.shape[1]-1)
+        masked_input = original_input.clone()
+        masked_input[0][mask_idx] = tokenizer.mask_token_id
+        outputs = model(masked_input)
+        scores = outputs[0]
+        predictions = torch.argmax(scores, dim=2)
+        loss += c_loss(scores[:, mask_idx, :], original_input[:, mask_idx])
         # assume the beginning is always batch index, and assume batch size is always 1
         def_mask_indices = def_mask_indices[1]
         def_masked_words = def_masked_words[0]
@@ -86,12 +98,10 @@ for epoch in range(args.epochs):
         outputs = model(def_input)
         predictions = outputs[0]
 
-        loss = torch.tensor([0.0])
-
         for def_mask_idx in def_mask_indices:
             pair_scores = predictions[0][def_mask_idx][word_pair_indices]
             # Now add this to loss
-            loss += torch.flatten(torch.abs(pair_scores[0] - pair_scores[1])) / abs(torch.max(pair_scores, dim=0)[0])
+            loss += BIAS_LOSS_WEIGHT * torch.flatten(torch.abs(pair_scores[0] - pair_scores[1]))
 
         # Get the predictions when masking potentially biased words, and compute loss:
         biased_word_id = tokenizer.convert_tokens_to_ids(bias_masked_token)
@@ -107,7 +117,7 @@ for epoch in range(args.epochs):
         predictions = outputs[0]
         pair_score = predictions[0][bias_pair_mask_index][biased_word_id]
 
-        loss += torch.abs(true_score - pair_score) / abs(max([true_score, pair_score]))
+        loss += BIAS_LOSS_WEIGHT * torch.abs(true_score - pair_score)
 
         loss.backward()
         optimizer.step()
